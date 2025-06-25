@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/book_recommendation.dart';
-import '../services/chatgpt_service.dart';
+import '../services/backend_service.dart';
 
 /// 앱의 메인 홈 화면 위젯
 /// 사용자 입력을 받아 AI 도서 추천을 받고 결과를 표시하는 화면
@@ -168,11 +168,48 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               const SizedBox(height: 20),
-              // API 키 유효성을 테스트하는 버튼 (개발/디버깅용)
+              // 백엔드 서버 연결 테스트 버튼들
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _testServerConnection,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        '서버 연결 테스트',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _testApiKey,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'API 키 테스트',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Mock 데이터 테스트 버튼
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _testApiKey,
+                  onPressed: _testMockData,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
@@ -180,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   child: const Text(
-                    'API 키 테스트',
+                    'Mock 데이터 테스트',
                     style: TextStyle(fontSize: 14),
                   ),
                 ),
@@ -410,8 +447,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      // ChatGPT API 호출하여 도서 추천 받기
-      final recommendations = await ChatGPTService.getBookRecommendations(
+      // 백엔드 API 호출하여 도서 추천 받기
+      final recommendations = await BackendService.getBookRecommendations(
         major: _majorController.text,
         interests: _interestsController.text,
         difficulty: _selectedDifficulty,
@@ -431,11 +468,37 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// OpenAI API 키의 유효성을 테스트하는 함수 (개발/디버깅용)
-  /// 간단한 API 호출로 키가 유효한지 확인하고 스낵바로 결과 표시
+  /// 백엔드 서버 연결 상태를 테스트하는 함수
+  Future<void> _testServerConnection() async {
+    try {
+      final isHealthy = await BackendService.checkServerHealth();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isHealthy ? '백엔드 서버 연결 성공!' : '백엔드 서버에 연결할 수 없습니다.'),
+          backgroundColor: isHealthy ? Colors.green : Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('서버 연결 테스트 중 오류: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// OpenAI API 키의 유효성을 테스트하는 함수 (백엔드를 통해)
   Future<void> _testApiKey() async {
     try {
-      final isValid = await ChatGPTService.testApiKey();
+      final isValid = await BackendService.testApiKey();
 
       if (!mounted) return;
 
@@ -452,6 +515,49 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('API 키 테스트 중 오류: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Mock 데이터를 테스트하는 함수
+  Future<void> _testMockData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _recommendations = [];
+    });
+
+    try {
+      final recommendations = await BackendService.getMockRecommendations();
+
+      setState(() {
+        _recommendations = recommendations;
+        _isLoading = false;
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mock 데이터 로드 성공!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Mock 데이터 테스트 중 오류: $e'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 3),
         ),
