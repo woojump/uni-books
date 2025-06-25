@@ -25,6 +25,22 @@ app.add_middleware(
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# 세종대 학술정보원 크롤러 import
+from sejong_library_api import (
+    SejongBookRecommendationRequest,
+    SejongBookRecommendationResponse, 
+    SejongBookInfo,
+    crawler as sejong_crawler
+)
+
+# 알라딘 크롤러 import
+from book_recommendation_api import (
+    BookRecommendationRequest as AladinRequest,
+    BookRecommendationResponse as AladinResponse,
+    BookInfo as AladinBookInfo,
+    crawler as aladin_crawler
+)
+
 # Pydantic 모델 정의
 class BookRecommendationRequest(BaseModel):
     lecture_title: str
@@ -85,7 +101,7 @@ async def test_api_key():
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "gpt-3.5-turbo",
+                    "model": "gpt-4o-mini",
                     "messages": [{"role": "user", "content": "Hello"}],
                     "max_tokens": 5,
                 },
@@ -120,7 +136,7 @@ async def get_book_recommendations(request: BookRecommendationRequest):
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "gpt-3.5-turbo",
+                    "model": "gpt-4o-mini",
                     "messages": [
                         {
                             "role": "system",
@@ -226,6 +242,136 @@ async def get_mock_recommendations():
         status="success",
         message="Mock 데이터가 성공적으로 반환되었습니다."
     )
+
+@app.post("/api/v1/sejong-book-recommendations", response_model=SejongBookRecommendationResponse)
+async def get_sejong_book_recommendations(request: SejongBookRecommendationRequest):
+    """세종대 학술정보원에서 도서 추천"""
+    try:
+        # 1단계: OpenAI API로 검색 키워드 생성
+        print("1단계: 검색 키워드 생성 중...")
+        keywords = await sejong_crawler.generate_search_keywords(request.lecture_title)
+        print(f"생성된 키워드: {keywords}")
+        
+        # 2단계: 10개 키워드로 각각 5개씩 총 50개 책 크롤링
+        print("2단계: 세종대 학술정보원 도서 크롤링 중...")
+        all_books = []
+        
+        for i, keyword in enumerate(keywords[:10], 1):
+            print(f"키워드 {i}/10: '{keyword}' 검색 중...")
+            books = await sejong_crawler.search_books_by_keyword(keyword, limit=5)
+            all_books.extend(books)
+            print(f"키워드 '{keyword}': {len(books)}개 수집")
+            
+        # 중복 제거 (제목 기준)
+        unique_books = []
+        seen_titles = set()
+        for book in all_books:
+            title = book.get('title', '')
+            if title and title not in seen_titles:
+                unique_books.append(book)
+                seen_titles.add(title)
+        
+        # 50개가 되도록 조정
+        if len(unique_books) > 50:
+            unique_books = unique_books[:50]
+        
+        print(f"총 {len(unique_books)}개의 고유 도서 수집 완료")
+        
+        if not unique_books:
+            raise HTTPException(status_code=404, detail="검색된 도서가 없습니다.")
+        
+        # 3단계: AI 추천
+        print("3단계: AI 도서 추천 분석 중...")
+        recommendation_result = await sejong_crawler.get_ai_book_recommendations(
+            unique_books,
+            request.interest_technology,
+            request.learning_difficulty
+        )
+        
+        # 응답 데이터 구성
+        recommended_books = []
+        for book in recommendation_result['books']:
+            recommended_books.append(SejongBookInfo(**book))
+        
+        return SejongBookRecommendationResponse(
+            recommended_books=recommended_books,
+            search_keywords=keywords,
+            total_books_analyzed=len(unique_books),
+            recommendation_reason=recommendation_result['reason']
+        )
+        
+    except Exception as e:
+        print(f"세종대 도서 추천 API 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"세종대 도서 추천 중 오류 발생: {str(e)}")
+
+@app.post("/recommend-books", response_model=AladinResponse)
+async def recommend_books(request: AladinRequest):
+    """
+    알라딘 크롤링 기반 도서 추천 API
+    """
+    try:
+        # 1단계: OpenAI API로 검색 키워드 생성
+        print("1단계: 검색 키워드 생성 중...")
+        keywords = await aladin_crawler.generate_search_keywords(request.lecture_title)
+        print(f"생성된 키워드: {keywords}")
+        
+        # 2단계: 10개 키워드로 각각 5개씩 총 50개 책 크롤링
+        print("2단계: 도서 크롤링 중...")
+        all_books = []
+        
+        for i, keyword in enumerate(keywords[:10], 1):  # 정확히 10개 키워드만
+            print(f"키워드 {i}/10: '{keyword}' 검색 중...")
+            books = await aladin_crawler.crawl_books_by_keyword(
+                keyword, 
+                request.major_field, 
+                limit=5  # 각 키워드당 정확히 5개
+            )
+            all_books.extend(books)
+            print(f"키워드 '{keyword}': {len(books)}개 수집")
+        
+        # 중복 제거 (제목 기준)
+        unique_books = []
+        seen_titles = set()
+        for book in all_books:
+            title = book.get('title', '')
+            if title and title not in seen_titles:
+                unique_books.append(book)
+                seen_titles.add(title)
+        
+        # 정확히 50개가 되도록 조정
+        if len(unique_books) > 50:
+            unique_books = unique_books[:50]
+        elif len(unique_books) < 50:
+            print(f"경고: 중복 제거 후 {len(unique_books)}개만 수집됨 (목표: 50개)")
+        
+        print(f"총 {len(unique_books)}개의 고유 도서 수집 완료 (목표: 50개)")
+        
+        if not unique_books:
+            raise HTTPException(status_code=404, detail="검색된 도서가 없습니다.")
+        
+        # 3단계: 50개 책 정보와 관심기술 유사도 분석으로 AI 추천
+        print("3단계: 50개 도서 목차 분석 및 AI 추천 중...")
+        recommendation_result = await aladin_crawler.get_ai_book_recommendations(
+            unique_books, 
+            request.interest_technology, 
+            request.learning_difficulty
+        )
+        
+        # 응답 데이터 구성
+        recommended_books = []
+        for book in recommendation_result['books']:
+            recommended_books.append(AladinBookInfo(**book))
+        
+        return AladinResponse(
+            recommended_books=recommended_books,
+            search_keywords=keywords,
+            total_books_analyzed=len(unique_books),
+            recommendation_reason=recommendation_result['reason']
+        )
+        
+    except Exception as e:
+        print(f"알라딘 API 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
