@@ -1,19 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:unibooks/screens/home_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:unibooks/presentation/screens/home_screen.dart';
 
 /// 앱의 진입점 (Entry point)
-/// - 환경 변수(.env) 파일을 로드하여 API 키 등을 사용할 수 있도록 초기화
-/// - Flutter 위젯 바인딩을 초기화하여 비동기 작업을 main에서 수행 가능
-void main() async {
-  // Flutter 위젯 바인딩 초기화 (비동기 작업을 위해 필요)
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // .env 파일에서 환경 변수 로드 (OpenAI API 키 등)
-  await dotenv.load(fileName: ".env");
-
-  // 앱 실행
-  runApp(const MyApp());
+/// - Riverpod ProviderScope로 앱을 감싸서 상태 관리 활성화
+void main() {
+  // Riverpod ProviderScope로 앱을 감싸서 실행
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 /// 앱의 루트 위젯

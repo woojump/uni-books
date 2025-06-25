@@ -47,6 +47,6 @@ app.*.map.json
 # Environment variables (API keys)
 .env
 
-/backend/venv/
-
+backend/.venv
+backend/start_server.sh
 /backend/venv/
