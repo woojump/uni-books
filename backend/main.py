@@ -245,14 +245,16 @@ async def get_mock_recommendations():
 
 @app.post("/api/v1/sejong-book-recommendations", response_model=SejongBookRecommendationResponse)
 async def get_sejong_book_recommendations(request: SejongBookRecommendationRequest):
-    """세종대 학술정보원에서 도서 추천"""
+    """세종대 학술정보원에서 도서 추천 - 새로운 단순화된 로직"""
     try:
-        # 1단계: OpenAI API로 검색 키워드 생성
+        print("=== main.py에서 세종대 도서 추천 API 시작 ===")
+        
+        # 1단계: 키워드 생성
         print("1단계: 검색 키워드 생성 중...")
         keywords = await sejong_crawler.generate_search_keywords(request.lecture_title)
         print(f"생성된 키워드: {keywords}")
         
-        # 2단계: 10개 키워드로 각각 5개씩 총 50개 책 크롤링
+        # 2단계: 키워드별로 도서 검색 (효율적으로 30개 정도까지)
         print("2단계: 세종대 학술정보원 도서 크롤링 중...")
         all_books = []
         
@@ -262,6 +264,11 @@ async def get_sejong_book_recommendations(request: SejongBookRecommendationReque
             all_books.extend(books)
             print(f"키워드 '{keyword}': {len(books)}개 수집")
             
+            # 충분한 책이 모이면 중단 (효율성 개선)
+            if len(all_books) >= 30:
+                print(f"충분한 도서 수집 완료 ({len(all_books)}개), 검색 중단")
+                break
+        
         # 중복 제거 (제목 기준)
         unique_books = []
         seen_titles = set()
@@ -271,16 +278,12 @@ async def get_sejong_book_recommendations(request: SejongBookRecommendationReque
                 unique_books.append(book)
                 seen_titles.add(title)
         
-        # 50개가 되도록 조정
-        if len(unique_books) > 50:
-            unique_books = unique_books[:50]
-        
         print(f"총 {len(unique_books)}개의 고유 도서 수집 완료")
         
         if not unique_books:
             raise HTTPException(status_code=404, detail="검색된 도서가 없습니다.")
         
-        # 3단계: AI 추천
+        # 3단계: AI 추천 (5개 선정)
         print("3단계: AI 도서 추천 분석 중...")
         recommendation_result = await sejong_crawler.get_ai_book_recommendations(
             unique_books,
@@ -288,10 +291,12 @@ async def get_sejong_book_recommendations(request: SejongBookRecommendationReque
             request.learning_difficulty
         )
         
-        # 응답 데이터 구성
+        # 응답 데이터 구성 (단순화된 방식)
         recommended_books = []
         for book in recommendation_result['books']:
             recommended_books.append(SejongBookInfo(**book))
+        
+        print(f"✅ 최종 추천 도서 {len(recommended_books)}권 완료")
         
         return SejongBookRecommendationResponse(
             recommended_books=recommended_books,
@@ -301,7 +306,10 @@ async def get_sejong_book_recommendations(request: SejongBookRecommendationReque
         )
         
     except Exception as e:
-        print(f"세종대 도서 추천 API 오류: {e}")
+        print(f"❌ 세종대 도서 추천 API 오류: {e}")
+        print(f"오류 타입: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"세종대 도서 추천 중 오류 발생: {str(e)}")
 
 @app.post("/recommend-books", response_model=AladinResponse)

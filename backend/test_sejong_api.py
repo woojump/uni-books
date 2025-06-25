@@ -49,6 +49,11 @@ async def test_sejong_api():
             
         else:
             print(f"API 요청 실패: {response.text}")
+            try:
+                error_data = response.json()
+                print(f"오류 상세: {json.dumps(error_data, ensure_ascii=False, indent=2)}")
+            except:
+                print(f"응답 텍스트: {response.text[:500]}")
             
     except requests.exceptions.Timeout:
         print("API 요청 시간 초과 (2분)")
