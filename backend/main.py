@@ -27,9 +27,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Pydantic 모델 정의
 class BookRecommendationRequest(BaseModel):
-    major: str
-    interests: str
-    difficulty: str
+    lecture_title: str
+    major_field: str
+    interest_technology: str
+    learning_difficulty: str
 
 class BookRecommendation(BaseModel):
     title: str
@@ -48,14 +49,15 @@ class BookRecommendationResponse(BaseModel):
     message: Optional[str] = None
 
 # 유틸리티 함수
-def create_prompt(major: str, interests: str, difficulty: str) -> str:
+def create_prompt(lecture_title: str, major_field: str, interest_technology: str, learning_difficulty: str) -> str:
     return f"""
-전공 분야: {major}
-관심 기술: {interests}
-학습 난이도: {difficulty}
+강의 제목: {lecture_title}
+전공 분야: {major_field}
+관심 기술: {interest_technology}
+학습 난이도: {learning_difficulty}
 
 위의 정보를 바탕으로 적합한 책 5권을 추천해주세요. 
-각 책은 전공 분야와 관심 기술에 맞고, 요청한 학습 난이도에 적합해야 합니다.
+각 책은 강의 내용과 전공 분야, 관심 기술에 맞고, 요청한 학습 난이도에 적합해야 합니다.
 실제 존재하는 책들로만 추천해주시고, 한국어 번역서가 있다면 우선적으로 추천해주세요.
 """
 
@@ -107,7 +109,7 @@ async def get_book_recommendations(request: BookRecommendationRequest):
     
     try:
         # 프롬프트 생성
-        prompt = create_prompt(request.major, request.interests, request.difficulty)
+        prompt = create_prompt(request.lecture_title, request.major_field, request.interest_technology, request.learning_difficulty)
         
         # OpenAI API 호출
         async with httpx.AsyncClient() as client:
