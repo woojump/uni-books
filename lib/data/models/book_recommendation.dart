@@ -1,4 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
+import '../../domain/entities/book_entity.dart';
 
 // build_runner로 생성되는 JSON 직렬화 코드 파일
 part 'book_recommendation.g.dart';
@@ -55,6 +56,39 @@ class BookRecommendation {
   /// BookRecommendation 객체를 JSON으로 변환
   /// 데이터 저장이나 API 전송 시 사용
   Map<String, dynamic> toJson() => _$BookRecommendationToJson(this);
+
+  /// Data model을 Domain entity로 변환
+  BookEntity toEntity() {
+    return BookEntity(
+      title: title,
+      author: author,
+      description: description,
+      genre: '', // API에서 genre 정보가 없는 경우 빈 문자열
+      isbn: isbn ?? '',
+      imageUrl: imageUrl ?? '',
+      rating: rating ?? 0.0,
+      pages: 0, // API에서 페이지 수 정보가 없는 경우 0
+      publishedDate: publicationYear ?? '',
+      difficulty: difficulty,
+      topics: [], // API에서 topics 정보가 없는 경우 빈 리스트
+    );
+  }
+
+  /// Domain entity를 Data model로 변환
+  static BookRecommendation fromEntity(BookEntity entity) {
+    return BookRecommendation(
+      title: entity.title,
+      author: entity.author,
+      description: entity.description,
+      difficulty: entity.difficulty,
+      isbn: entity.isbn.isEmpty ? null : entity.isbn,
+      publisher: null, // Entity에 publisher 정보가 없음
+      publicationYear:
+          entity.publishedDate.isEmpty ? null : entity.publishedDate,
+      rating: entity.rating == 0.0 ? null : entity.rating,
+      imageUrl: entity.imageUrl.isEmpty ? null : entity.imageUrl,
+    );
+  }
 }
 
 /// 도서 추천 요청 정보를 담는 데이터 모델
@@ -116,4 +150,44 @@ class Message {
       _$MessageFromJson(json);
 
   Map<String, dynamic> toJson() => _$MessageToJson(this);
+}
+
+/// 책 상세 정보를 담는 데이터 모델
+class BookDetail {
+  final BookRecommendation basicInfo;
+  final String? coverImageUrl;
+  final String plot;
+  final DetailedRating rating;
+  final List<String> reviews;
+  final bool isAvailableForLoan;
+
+  BookDetail({
+    required this.basicInfo,
+    this.coverImageUrl,
+    required this.plot,
+    required this.rating,
+    required this.reviews,
+    required this.isAvailableForLoan,
+  });
+}
+
+/// 상세 평점 정보
+class DetailedRating {
+  final double overall;
+  final int totalReviews;
+  final int fiveStars;
+  final int fourStars;
+  final int threeStars;
+  final int twoStars;
+  final int oneStars;
+
+  DetailedRating({
+    required this.overall,
+    required this.totalReviews,
+    required this.fiveStars,
+    required this.fourStars,
+    required this.threeStars,
+    required this.twoStars,
+    required this.oneStars,
+  });
 }
